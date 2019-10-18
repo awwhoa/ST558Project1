@@ -376,7 +376,7 @@ g11 <- ggplot(sub1, aes(Wednesday, Saturday, group=Park))
 g11 + geom_point(aes(color=Park)) +
   facet_grid(~Borough) +
   ggtitle("Scatterplot of Wed. vs Sat. Attendance at the Four Most Used Parks by Borough")
-
+  
 ```
 
 
