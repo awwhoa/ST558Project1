@@ -1,0 +1,385 @@
+---
+title: "XML Vignette"
+author: "Allyson Wood"
+date: "10/18/2019"
+output: 
+  html_document:
+    toc: true
+    toc_depth: '3'
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+library(xml2)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(DT)
+library(matrixStats)
+```  
+
+## XML Data  
+
+### What is it?  
+
+XML stands for eXtensible Markup Language. It is used to describe and structure data on the internet and for mobile apps ( [Source](https://www.makeuseof.com/tag/xml-file-case-wondering/) ).  It is designed to store and transport data ( [Source](https://www.w3schools.com/xml/xml_whatis.asp) ), with a focus on what the data is regardless of how it will be presented ( [Source](https://www.tutorialspoint.com/xml/xml_overview.htm ) ). 
+XML can be used in various aspects of web development; further, it is often used to separate the actual data from the presentation of the data ( [Source](https://www.w3schools.com/xml/xml_usedfor.asp) ).  XML doesn't actually do anything. Rather, it is just information wrapped in tags ( [Source](https://www.w3schools.com/xml/xml_whatis.asp) ).  It is also extensible, which allows users to customize these information tags to fit a given application ( [Source](https://www.tutorialspoint.com/xml/xml_overview.htm ). XML is a good data storage format in cases where database defintions may change over time ( [Soure](http://nativexmldatabase.com/2010/09/28/5-reasons-for-storing-xml-in-a-database/) ).  XML used to be the only option for exchanging open data, but JSON has become an attractive option in recent years 
+( [Source](https://blog.cloud-elements.com/json-better-xml) ).  
+
+Some additional, more specific uses for XML incude the following: 
+
+*  In the background to simplify HTML document creation for large websites  
+*  To exchange information between organizations and systems  
+*  To offload and reload databases  
+*  Merged with style sheets to create almost any desire output  
+( [Source](https://www.tutorialspoint.com/xml/xml_overview.htm ) )
+
+### Packages for XML
+
+There are two primary packages for reading and manipulating XML documents in R:  XML and xml2. XML is not actively maintained anymore, but is still used by many, while xml2 is a more recent alternative that is actively maintained ( [Source](https://gist.github.com/nuest/3ed3b0057713eb4f4d75d11bb62f2d66) ).  The xml2 package was utilized for this analysis, because the most helpful resource in learning how to unpack an xml file used the xml2 package. Additionally, it was used to ensure that the most recent features were available for this project. 
+
+
+## Summer Sports Data
+
+This dataset was retrieved from the [Data.gov](https://www.data.gov/) data catalog. It contains weekly activity and attendance records from New York City's Summer Sports Experience program from April 2017 to September 2018. The Summer Sports Experience Program provides sports instruction to children ages 8 to 14. More information about the Summer Sports Experience program can be accessed via their [website](https://www.nycgovparks.org/events/summer-sports-experience). 
+
+Each row represents sports program attendance at a given borough, park, and sports event for each week between April 2017 and September 2018. The dataset contains 309 records and 13 variables, including three categorical variables, two date variables, and eight numeric variables. Variable names and descriptions are listed below:  
+
+### Variables
+*  Categorical   
+    +  Borough Location - NYC borough in which the Summer Sports Experience program occurred  
+    +  Park Location - name of park or playground in which Summer Sports Experience program occurred  
+    +  Sports Played - specific sport that was part of the day's activities  
+*  Date 
+    +  Week Start Date - the start date of the week for which attendance was recorded  
+    +  Week End Date - the end date of the week for which attendance was recorded  
+*  Numeric 
+    +  Sunday's Attendance - attendance count for Sunday  
+    +  Monday's Attendance - attendance count for Monday  
+    +  Tuesday's Attendance - attendance count for Tuesday  
+    +  Wednesday's Attendance - attendance count for Wednesday  
+    +  Thursday's Attendance - attendance count for Thursday  
+    +  Friday's Attendance- attendance count for Friday  
+    +  Saturday's Attendance- attendance count for Saturday  
+    +  Attendance Sum - sum of attendance for the week
+
+[Metadata and additional dataset information](https://data.cityofnewyork.us/Recreation/Summer-Sports-Experience/xeg4-ic28)  
+[XML data source](https://data.cityofnewyork.us/api/views/xeg4-ic28/rows.xml?accessType=DOWNLOAD)
+
+```{r read , echo=TRUE}
+# Read in the xml file with the read_xml function. The 'x' argument can be a filepath, a url, 
+# or a literal xml.
+xData <- read_xml(x="/Users/babyrenegade/Google Drive/NCSU/Fall 2019/ST558/Project1/summersports.xml")
+
+# Several xml2 funcitons are useful for finding and extracting data records from the
+# xml tree structure. xml_name gives you the names of elements in your xml hierarchy/tree structure
+xml_name(xData)
+# xml_parent returns the node one level above the element you're "querying" in the xml tree
+xml_name(xml_parent(xData))
+# xml_children returns the elements of the level below the element you're "querying"
+xml_name(xml_children(xData))
+# Use xml_find_first to find the first element in xData's first level that's tagged with "response"
+xml_find_first(xData, "//response")
+# Use xml_find_first to find the first element in next level down that's tagged with row
+xml_find_first(xData, "//response/row")
+# Use xml_find_first to find the first element in next level down that's tagged with row. 
+# This is the data we're looking for!
+xml_find_first(xData, "//response/row/row")
+
+# Use xml_find_all to get all the values for each dataset column using their native xml tags .
+# Use xml_text to extract the values for what will be the values for each column
+Borough <- xml_text(xml_find_all(xData, "//borough_location"))
+Park <- xml_text(xml_find_all(xData, "//park_location"))
+Sport <- toupper(xml_text(xml_find_all(xData, "//sports_played")))
+# Format the date values, so they print as dates that make sense
+WkStartDt <- format(as_date(xml_text(xml_find_all(xData, "//week_start_date"))), format="%Y-%m-%d")
+WkEndDt <- format(as_date(xml_text(xml_find_all(xData, "//week_end_date"))), format="%Y-%m-%d")
+# Convert the attendance variables to numeric
+Sunday <- as.numeric(xml_text(xml_find_all(xData, "//sunday_s_attendance")))
+Monday <- as.numeric(xml_text(xml_find_all(xData, "//monday_s_attendance")))
+Tuesday <- as.numeric(xml_text(xml_find_all(xData, "//tuesday_s_attendance")))
+Wednesday <- as.numeric(xml_text(xml_find_all(xData, "//wednesday_s_attendance")))
+Thursday <- as.numeric(xml_text(xml_find_all(xData, "//thursday_s_attendance")))
+Friday <- as.numeric(xml_text(xml_find_all(xData, "//friday_s_attendance")))
+Saturday <- as.numeric(xml_text(xml_find_all(xData, "//saturday_s_attendance")))
+TotalWeeklyAttendance <- as.numeric(xml_integer(xml_find_all(xData, "//attendance_sum")))
+
+# Combine all the columns and convert to a tibble.
+# Convert the numeric variables to numeric again, just to make sure
+sportsData<- tbl_df(cbind(Borough,
+                          Park,
+                          Sport,
+                          WkStartDt,
+                          WkEndDt,
+                          Sunday,
+                          Monday, 
+                          Tuesday,
+                          Wednesday, 
+                          Thursday, 
+                          Friday, 
+                          Saturday, 
+                          TotalWeeklyAttendance)) %>% 
+                  mutate(Sunday=as.numeric(Sunday),
+                         Monday=as.numeric(Monday),
+                         Tuesday=as.numeric(Tuesday),
+                         Wednesday=as.numeric(Wednesday),
+                         Thursday=as.numeric(Thursday),
+                         Friday=as.numeric(Friday),
+                         Saturday=as.numeric(Saturday),
+                         TotalWeeklyAttendance=as.numeric(TotalWeeklyAttendance))
+
+
+# Clean up the sports column for easier summaries. Create a new categorical variable 
+# for sports played to get a more accurate picture of the most popular sports and to facilitate
+# summarization. Assume that for the records that have  more than one sport listed, the first 
+# sport is the one played the most at that park on that given day and week.
+# Initialize the new sports group variable first.
+sportsData$SportGroup <- NA
+# Populate with corresponding sports data
+sportsData$SportGroup[substr(sportsData$Sport,1,10)=="BASKETBALL"] <- "BASKETBALL"
+sportsData$SportGroup[substr(sportsData$Sport,1,11)=="FIELD GAMES"] <- "FIELD GAMES"
+sportsData$SportGroup[substr(sportsData$Sport,1,14)=="FITNESS FRIDAY"] <- "FITNESS FRIDAY"
+sportsData$SportGroup[substr(sportsData$Sport,1,8)=="FOOTBALL"] <- "FOOTBALL"
+sportsData$SportGroup[substr(sportsData$Sport,1,13)=="FLAG FOOTBALL"] <- "FOOTBALL"
+sportsData$SportGroup[substr(sportsData$Sport,1,6)=="SOCCER"] <- "SOCCER"
+sportsData$SportGroup[substr(sportsData$Sport,1,8)=="SOFTBALL"] <- "SOFTBALL"
+sportsData$SportGroup[substr(sportsData$Sport,1,8)=="KICKBALL"] <- "KICKBALL"
+sportsData$SportGroup[substr(sportsData$Sport,1,10)=="VOLLEYBALL"] <- "VOLLEYBALL"
+sportsData$SportGroup[substr(sportsData$Sport,1,5)=="TRACK"] <- "TRACK"
+# Replace remaining NAs in SportGroup column with OTHER category
+sportsData$SportGroup[is.na(sportsData$SportGroup)] <- "OTHER SPORT"
+```
+
+
+## Data Table  
+
+```{r datasum1, echo=TRUE}
+datatable(sportsData %>% 
+            select(c(Borough, Park, SportGroup, TotalWeeklyAttendance)),
+          caption="Searchable table of total weekly attendance")
+
+```
+
+### One-Way Summaries of the Categorical Variables
+The sports program takes place at 9 different parks around NYC, but attendance is highest at the Playground for All Children and in Queens. Basketball has had the highest attendance in the program across the time period studied.
+```{r datasum2, echo=TRUE}
+kable(sportsData %>%
+               group_by(Park) %>%
+               summarise(Total = sum(TotalWeeklyAttendance)) %>%
+               arrange(desc(Total)),
+             caption="Total Attendance at Each Park Between April 2017 and September 2018")
+
+kable(sportsData %>%
+               group_by(Borough) %>%
+               summarise(Total = sum(TotalWeeklyAttendance)) %>%
+               arrange(desc(Total)),
+             caption="Total Attendance at Each Borough Between April 2017 and September 2018")
+
+# Basketball, soccer, and track are the sports activities that occur the most
+kable(sportsData %>% 
+               group_by(SportGroup) %>%
+               summarise(Total = sum(TotalWeeklyAttendance)) %>% 
+               arrange(desc(Total)),
+             caption="Total Attendance at by Sport Between April 2017 and September 2018")
+```
+
+### Two-Way Summaries of the Categorical Variables
+Sunset Park saw the most sports program activity during the time period. Perhaps this is the biggest park with the most available facilities. Basketball was the sport played most frequently during the time period studied.
+```{r datasum3, echo=TRUE}
+kable(table(sportsData$Park, sportsData$SportGroup),
+      caption="Number of Weeks Each Sport Was Played in Each Park")
+kable(table(sportsData$SportGroup, sportsData$Borough),
+      caption="Number of Weeks Each Sport Was Played in Each Borough")
+```
+
+
+## Visualizations
+
+### One-Way Plots of Categorical Variables  
+Basketball is played most frequently. Sunset park is used most frequently for the sports program. 
+Sports are played most frequently in Brooklyn.  
+
+```{r barplots1, echo=TRUE}
+#library(reshape2)
+g1 <- ggplot(sportsData, aes(x=SportGroup))
+g1 + geom_bar() + 
+  labs(x="Sports") + 
+  coord_flip() +
+  labs(y="# of weeks", x="Sport") +
+  ggtitle("No. of Weeks Each Sport was Played Between Apr '17 & Sept. '18")
+
+
+g2 <- ggplot(sportsData, aes(x=Park))
+g2 + geom_bar() + 
+  labs(x="Parks") + 
+  coord_flip() +
+  labs(y="# of weeks", x="Park") +
+  ggtitle("No. of Weeks Sports Were Played in Each Park Between Apr '17 & Sept. '18")
+
+
+g3 <- ggplot(sportsData, aes(x=Borough))
+g3 + geom_bar() + 
+  labs(x="Boroughs") + 
+  coord_flip() +
+  labs(y="# of weeks", x="Borough") +
+  ggtitle("No. of Weeks Sports Were Played in Each Borough Between Apr '17 & Sept. '18")
+
+```
+
+
+### Two-Way Plots of Categorical Variables  
+Some parks had more sports activity throughout the time period than others. Some parks only cater to a certain few sports. It might be useful to research more about the structures and facilities available at each park to understand the vast differences between the parks and activities at each park in each borough. Furthermore, more detailed census-type information about the population that this program serves would be add more value to this analysis.
+```{r barplots2, echo=TRUE}
+g4 <- ggplot(sportsData, aes(x=Park))
+g4 + geom_bar(aes(fill = SportGroup), position = "dodge") + 
+  labs(y="Count", x="Year", fill="") +
+  coord_flip() +
+  ggtitle("No. of Weeks Sports Were Played at All Parks")
+
+sub1 <- sportsData %>% 
+        filter((Park=="Sunset Park") |
+               (Park=="Playground for All Children") |
+               (Park=="Williamsbridge Oval") |
+               (Park=="Thomas Jefferson Park"))
+
+g4 <- ggplot(sub1, aes(x=Park))
+g4 + geom_bar(aes(fill = SportGroup), position = "dodge") + 
+  labs(y="# of weeks", fill="") +
+  coord_flip() +
+  ggtitle("No. of Weeks Sports Were Played at the Most Used Parks")
+
+g5 <- ggplot(sportsData, aes(x=Borough))
+g5 + geom_bar(aes(fill = SportGroup), position = "dodge") + 
+  labs(y="# of weeks", fill="") +
+  coord_flip() +
+  ggtitle("No. of Weeks Sports Were Played in Each Borough")
+
+g7 <- ggplot(sub1, aes(x=SportGroup)) 
+g7 + geom_bar(aes(fill=Park), position = "dodge") + 
+  labs(y="# of weeks", fill="") + 
+  facet_grid(~Borough) +
+  coord_flip() + 
+  ggtitle("No. of Weeks Each Sport is Played by Park and Borough")
+
+```
+
+
+### Quantitative Variables  
+
+Numeric summaries for daily and total weekly attendance for select sports
+```{r numsums, echo=TRUE}
+# Create a function that will calculate numeric summaries for daily and total attendance for a given SportGroup
+sumAttendance <- function(x){
+  subset <- sportsData %>%
+                filter(SportGroup==x) %>%
+                select(c("Sunday",
+                         "Monday", 
+                         "Tuesday",
+                         "Wednesday", 
+                         "Thursday",
+                         "Friday",
+                         "Saturday",
+                         "TotalWeeklyAttendance")) %>% 
+                summary()
+  title = paste("Summary Statistics of Daily and Total Weekly Attendance for",x,sep=" ")
+
+  Min <- as.numeric(gsub('.*:', '', subset[1,]))
+  Q1 <- as.numeric(gsub('.*:', '', subset[2,]))
+  Median <- as.numeric(gsub('.*:', '', subset[3,]))
+  Mean <- as.numeric(gsub('.*:', '', subset[4,]))
+  Q3 <- as.numeric(gsub('.*:', '', subset[5,]))
+  Max <- as.numeric(gsub('.*:', '', subset[6,]))
+  
+  tbl <- round(rbind(Min,Q1,Median,Mean,Q3,Max),1)
+  
+  kable(tbl,
+        col.names = c("Sun","Mon","Tues","Wed","Thurs","Fri","Sat","TotalWeekly"),
+        caption = title)
+}
+
+sumAttendance("BASKETBALL")
+sumAttendance("FOOTBALL")
+sumAttendance("SOFTBALL")
+sumAttendance("TRACK")
+
+```
+
+Average daily attendance for select sports
+```{r function, echo=TRUE}
+findMeanAttendance <- function(x) {
+  subset <- sportsData %>%
+              filter(SportGroup==x) %>% 
+              select(Sunday:Saturday) %>% 
+              colMeans() %>% 
+              round(0)
+  title = paste("Average Attendance by Day for",x,sep=" ")
+  # return(subset)
+  kable(as.data.frame(subset),
+        col.names="AvgDaily",
+        caption=title)
+}
+
+findMeanAttendance("BASKETBALL")
+findMeanAttendance("FOOTBALL")
+findMeanAttendance("SOCCER")
+
+
+```
+
+
+```{r boxplots, echo=TRUE}
+sub2 <- sportsData %>% 
+        filter(((Park=="Sunset Park") |
+               (Park=="Playground for All Children") |
+               (Park=="Williamsbridge Oval") |
+               (Park=="Thomas Jefferson Park")) &
+                SportGroup=="FOOTBALL")
+
+g8 <- ggplot(sub2, aes(Park,Saturday))
+g8 + geom_boxplot() +
+  geom_point(aes(colour=Park),position="jitter") +
+  ggtitle("Boxplots for Saturday Football Attendance for the 4 Most Used Parks ")
+
+sub3 <- sportsData %>% 
+        filter(((Park=="Sunset Park") |
+               (Park=="Playground for All Children") |
+               (Park=="Williamsbridge Oval") |
+               (Park=="Thomas Jefferson Park")) &
+                SportGroup=="BASKETBALL")
+
+
+g8 <- ggplot(sub3, aes(Park,Saturday))
+g8 + geom_boxplot() +
+  geom_point(aes(colour=Park),position="jitter") +
+  ggtitle("Boxplots for Saturday Basketball Attendance at the 4 Most Used Parks ")
+
+g9 <- ggplot(sportsData, aes(Borough,TotalWeeklyAttendance))
+g9 + geom_boxplot() +
+  geom_point(aes(colour=Borough),position="jitter") +
+  ggtitle("Boxplots for Total Weekly Attendance by Borough")
+
+```
+
+
+
+```{r scatterplots, echo=TRUE}
+# sub3 <- sub1 %>% filter(SportGroup=="BASKETBALL" | SportGroup=="FOOTBALL")
+# g10 <- ggplot(sportsData, aes(Wednesday, Saturday, group=SportGroup))
+# g10 + geom_point(aes(color=SportGroup)) 
+
+g10 <- ggplot(sportsData, aes(Wednesday, Saturday, group=Borough))
+g10 + geom_point(aes(color=Borough)) +
+  ggtitle("Scatterplot of Wed. vs Sat. Attendance in all Five Boroughs")
+
+g11 <- ggplot(sub1, aes(Wednesday, Saturday, group=Park))
+g11 + geom_point(aes(color=Park)) +
+  facet_grid(~Borough) +
+  ggtitle("Scatterplot of Wed. vs Sat. Attendance at the Four Most Used Parks by Borough")
+
+```
+
+
+## Final Thoughts  
+Although this analysis yieled some informative results and summaries, it may be necessary to seek additional data to augment it. The parks in this dataset do not appear to be created equal, based on the differences among them in daily and weekly attendance numbers. Additional information regarding the available structures and facilities at each park would help to segment the parks further for a more valuable comparison. Obtaining population statistics for each NYC borough would also be useful to help determine whether that each area's sports needs are being met.
+

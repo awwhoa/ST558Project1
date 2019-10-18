@@ -1,0 +1,332 @@
+---
+title: "JSON Vignette"
+author: "Allyson Wood"
+date: "10/18/2019"
+output: 
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(jsonlite)
+library(dplyr)
+library(knitr)
+library(DT)
+library(ggplot2)
+```  
+
+## JSON Data 
+
+### What is it?
+JSON stands for JavaScript Object Notation, and it is derived from JavaScript. It "is a lightweight format for storing and transporting data" [Source](https://www.w3schools.com/whatis/whatis_json.asp).  "It is used primarily to transmit data between a server and web application, as an alternative to XML"  [Source](https://developers.squarespace.com/what-is-json).  It is a text file that is easy for machines to parse and generate [Source](https://blog.sqlizer.io/posts/json-store-data/).  It is used by many APIs and Databases, and it is easy for people and computers to read
+[Source](https://realpython.com/lessons/what-is-json/).  JSON files define two data structures:  objects and arrays. JSON data is structured like a map, containing key/value pairs [Source](https://blog.cloud-elements.com/json-better-xml).
+
+JSON has a specific syntax that helps indicate how the data within files are structure. "Objects are enclosed in braces ({}), their name-value pairs are separated by a comma (,), and the name and value in a pair are separated by a colon (:). Names in an object are strings, whereas values may be of any of the seven value types, including another object or an array. Arrays are enclosed in brackets ([]), and their values are separated by a comma (,). Each value in an array may be of a different type, including another array or an object" [Source](https://javaee.github.io/tutorial/jsonp001.html). JSON has some advantages over it's XML predecessor with respect to open data sharing. JSON is open standard, easy to read and write, and is more compact than other data representations [Source](https://javaee.github.io/tutorial/jsonp001.html).  It doesn't use as many words, and it is faster to parse than XML files. The JSON data model's map-like structure matches the actual data, and it is predictable and easier to interpret [Source](https://blog.cloud-elements.com/json-better-xml).
+
+### Packages for JSON
+There are 3 major packages for converting JSON data into a format useful in R:  jsonlite, rjson, and RJSONIO. RJSONIO consists of three primary functions that facilitate reading and writing data in JSON format, including from web applications. It can also be used to help generate dynamic plots. RJSONIO was created primarily for exporting R objects for use in creating dynamic web graphics [Source](http://www.omegahat.net/RJSONIO/). rjson converts JSON objects into R objects and vice versa. It consists of two primary functions that read in and write out JSON data, which makes it simple to use  [Source](https://crantastic.org/packages/rjson/reviews/16). jsonlite is a fast JSON parser and generator that is ideal for the web and statistical data. It started as an offshot of RJSONIO, but is now an independent version of JSON. It is especially useful for interactin with web APIs [Source](https://cran.r-project.org/web/packages/jsonlite/jsonlite.pdf).
+
+This project uses the jsonlite package, because it worked well on the first try without any hiccups. From there, it was somewhat easy to determine the method for extracting the relevant data.
+
+
+## Hate Crimes Data 
+
+This dataset was retrieved from the [Data.gov](https://www.data.gov/) data catalog. It contains hate crime data broken down by New York counties and bias types for each year from 2010 to 2016. 
+
+"Under New York State’s Hate Crime Law (Penal Law Article 485), a person commits a hate crime when one of a specified set of offenses is committed targeting a victim because of a perception or belief about their race, color, national origin, ancestry, gender, religion, religious practice, age, disability, or sexual orientation, or when such an act is committed as a result of that type of perception or belief. These types of crimes can target an individual, a group of individuals, or public or private property. DCJS submits hate crime incident data to the FBI’s Uniform Crime Reporting (UCR) Program. Information collected includes number of victims, number of offenders, type of bias motivation, and type of victim" [Source](https://catalog.data.gov/dataset/hate-crimes-by-county-and-bias-type-beginning-2010). 
+
+The dataset contains 423 rows and 44 variables, the names and descriptions of which are outlined below:
+
+### Variables  
+*  Categorical Variables  
+    +  County - location where the crime was reported  
+    +  Crime type - category of crime defined by the FBI
+*  Date Variables
+    +  Year - year the crime incident was reported
+*  Numeric Variables
+    +  38 different variables indicating the number of crimes for each type of hate/bias   
+    +  Total incidents - sum of hate crimes reported
+    +  Total victims - unique count of victims reported 
+    +  Total offenders - unique count of offenders reported
+    
+[Metadata and additional dataset information](https://data.ny.gov/Public-Safety/Hate-Crimes-by-County-and-Bias-Type-Beginning-2010/6xda-q7ev)   
+[XML data](https://data.ny.gov/api/views/6xda-q7ev/rows.xml?accessType=DOWNLOAD)
+
+```{r import, echo=TRUE}
+# Read the json data into R with the fromJSON function. This is the only jsonlite function that
+# this anlaysis uses, as base R and dplyr functions were used to extract the information needed
+# to build the dataset
+jData1 <- fromJSON("/Users/babyrenegade/Google Drive/NCSU/Fall 2019/ST558/Project1/hatecrimes.json",
+                   simplifyDataFrame=TRUE)
+
+# The resulting object is a list containing two elements. The first element contains metadata
+# for the dataset. The second element contains the raw data that will make up the analysis
+# dataset
+class(jData1)
+
+# Extract the raw data from the second element of the JSON list structure and convert it to a 
+# data frame and then to a tibble
+jData2 <- tbl_df(as.data.frame(jData1[[2]]))
+
+# Using an inline function, look at the first level of the metadata element and see that it 
+# contains 6 different data frames
+jMeta1 <- sapply(jData1, function(x) x[[1]])
+
+# Extract the second data frame containing the column names and types 
+jMeta2 <- jMeta1[["meta"]][["columns"]]
+
+# Save the column names and types to apply to data frame 
+# Save the field descriptions for future reference as well
+jMeta3 <- jMeta2 %>% select(fieldName,dataTypeName,description)
+jColNames <- jMeta3[[1]] 
+
+# Add column names to the data frame
+names(jData2) <- jColNames
+
+# Drop the weird metadata columns not needed and convert the columns to the correct data types
+jData3 <- jData2 %>%
+            select(-c(1:8)) %>%
+            mutate(county = as.character(county),
+                   crime_type = as.character(crime_type))
+jData4a <- jData3 %>% 
+            select(1:3)
+
+# Deconstruct the data file to more easily convert columns 4 through 44 to numeric 
+i <- 4:44
+jData4b <- apply(jData3[,i], 2, function(x) as.numeric(as.character(x)))
+
+# Put the two sections back together to finalize the data set
+hate <- cbind(jData4a,jData4b)
+
+# Convert crime_type to a factor
+hate$crime_type <- as.factor(hate$crime_type)
+
+# Convert the dataset to a tibble and view it to ensure it contains the correct attributes
+hate <- tbl_df(hate)
+hate
+
+# Now we're ready to explore it!
+```  
+
+### New Variables
+```{r datasum5, echo=TRUE}
+# Create three new variables that roll up some of the like hate crimes into fewer categories
+hate <- hate %>% mutate(totalAntiGay = anti_gay_male + anti_gay_female,
+                        totalAntiRace = (anti_white                              
+                                        + anti_american_indian_alaskan_native     
+                                        + anti_native_hawaiian_pacific_islander
+                                        + anti_black               
+                                        + anti_other_race                         
+                                        + anti_asian               
+                                        + anti_multi_racial_groups
+                                        + anti_hispanic
+                                        + anti_arab 
+                                        + anti_non_hispanic),
+                        totalAntiReligion  = (anti_jewish
+                                            + anti_catholic
+                                            + anti_islamic_muslim
+                                            + anti_atheism_agnosticism
+                                            + anti_other_religion
+                                            + anti_eastern_orthodox_greek_russian_etc
+                                            + anti_jehovahs_witness
+                                            + anti_other_christian
+                                            + anti_protestant
+                                            + anti_multi_religious_groups
+                                            + anti_religious_practice_generally
+                                            + anti_buddhist
+                                            + anti_hindu
+                                            + anti_mormon
+                                            + anti_sikh))
+```
+
+
+
+## Data Tables and Numeric Summaries  
+```{r datasum1, echo=TRUE}
+datatable(hate %>%
+            select(c(year, county, crime_type, total_incidents, total_victims, total_offenders)),
+          caption="Searchable table of hate crime information")
+
+```
+
+### Total Incidents by Each Categorical Variable
+Reported hate crime incidents fluctuated between 2010 and 2016 with no apparent upward or downward trend. Between 2010 and 2016, more crimes against persons were reported than were property crimes, but only slightly so. Over the period analyzed, Kings County reported the highest number of reported hate crimes.
+```{r datasum2, echo=TRUE}
+# Sum the total incidents reported by year
+kable(hate %>%
+               group_by(year) %>%
+               summarise(total=sum(total_incidents)) %>% 
+               arrange(year),
+             caption="Number of Hate Crimes Per Year")
+
+# Sum the total incidents reported by crime type
+kable(hate %>% 
+               group_by(crime_type) %>%
+               summarise(total=sum(total_incidents)) %>% 
+               arrange(desc(total)),
+             caption="Number of Hate Crimes by Crime Type")
+
+# Sum the total incidents reported by county
+kable(hate %>%
+               group_by(county) %>%
+               summarise(total=sum(total_incidents)) %>%
+               arrange(desc(total)),
+             caption="Number of Hate Crimes by County")
+
+```
+
+### Numeric Summaries
+```{r datasum3, echo=TRUE}
+# Create a function that will calculate numeric summaries for total crimes, victims, and
+# offenders for each year of data
+createAnnualSummaryTbl <- function(x){
+  subset <- hate %>%
+                filter(year==x) %>%
+                select(c("total_incidents", "total_victims", "total_offenders")) %>% 
+                summary()
+  title = paste("Summary Statistics of All Hate Crime Incidents, Victims, and Offenders in",x,sep=" ")
+
+  Min <- as.numeric(gsub('.*:', '', subset[1,]))
+  Q1 <- as.numeric(gsub('.*:', '', subset[2,]))
+  Median <- as.numeric(gsub('.*:', '', subset[3,]))
+  Mean <- as.numeric(gsub('.*:', '', subset[4,]))
+  Q3 <- as.numeric(gsub('.*:', '', subset[5,]))
+  Max <- as.numeric(gsub('.*:', '', subset[6,]))
+  
+  tbl <- round(rbind(Min,Q1,Median,Mean,Q3,Max),1)
+  
+  kable(tbl,
+        col.names = c("All Incidents","All Victims","All Offenders"),
+        caption = title)
+}
+
+createAnnualSummaryTbl(2010)
+createAnnualSummaryTbl(2011)
+createAnnualSummaryTbl(2012)
+createAnnualSummaryTbl(2013)
+createAnnualSummaryTbl(2014)
+createAnnualSummaryTbl(2015)
+createAnnualSummaryTbl(2016)
+
+# Create another function that summarizes the three large race, gay, and religion hate crimes
+summarizeVictims <- function(x){
+  subset <- hate %>%
+                # filter(year==x) %>%
+                select(c("totalAntiGay", "totalAntiRace", "totalAntiReligion")) %>% 
+                summary()
+  title = "Summary Statistics of AntiGay, AntiRace, and AntiReligion Victims"
+
+  Min <- as.numeric(gsub('.*:', '', subset[1,]))
+  Q1 <- as.numeric(gsub('.*:', '', subset[2,]))
+  Median <- as.numeric(gsub('.*:', '', subset[3,]))
+  Mean <- as.numeric(gsub('.*:', '', subset[4,]))
+  Q3 <- as.numeric(gsub('.*:', '', subset[5,]))
+  Max <- as.numeric(gsub('.*:', '', subset[6,]))
+  
+  tbl <- round(rbind(Min,Q1,Median,Mean,Q3,Max),1)
+  
+  kable(tbl,
+        col.names = c("AntiGay Victims","AntiRace Victims","AntiReligion Victims"),
+        caption = title)
+}
+
+summarizeVictims()
+```
+
+
+
+
+
+### Total Incidents by Two Categorical Variables
+
+
+```{r datasum4, echo=TRUE}
+kable(table(hate$county, hate$crime_type),
+      caption="Number of Years in Each County that Hate Crimes of Each Type Were Reported")
+# kable(table(hate$county, hate$year),
+#       caption="Number of Crime Types Reported in Each County for Each Year")
+kable(table(hate$year, hate$crime_type),
+      caption="Number of Counties with Reported Hate Crime Incidents by Year and Crime Type")
+```
+
+
+## Visualizations
+
+```{r barplots1, echo=TRUE}
+g1 <- ggplot(hate, aes(x=year))
+g1 + geom_bar() + 
+  labs(x="Years") + 
+  ggtitle("Number of Counties that Reported Any Hate Crimes in Each Year")
+
+g4 <- ggplot(hate, aes(x=year))
+g4 + geom_bar(aes(fill = crime_type), position = "dodge") + 
+  labs(y="Count", x="Year", fill="") +
+  ggtitle("Number of Counties That Reported Hate Crimes of Each Type in Each Year")
+
+```
+
+
+### Boxplots
+The crime type distributions of the total anti-gay crime victims differ from one another. Further investigation into the specific crimes that were committed against this group of people may yield additional insight into this difference.
+```{r boxplots, echo=TRUE}
+g71 <- ggplot(hate, aes(crime_type,total_incidents))
+g71 + geom_boxplot() +
+  geom_point(aes(colour=crime_type),position="jitter") +
+  ggtitle("Boxplots for Total Hate Crime Incidents by Crime Type")
+
+g73 <- ggplot(hate, aes(crime_type,anti_black))
+g73 + geom_boxplot() +
+  geom_point(aes(colour=crime_type),position="jitter") +
+  ggtitle("Boxplots for AntiBlack Crime Victims by Crime Type")
+
+g74 <- ggplot(hate, aes(crime_type,totalAntiRace))
+g74 + geom_boxplot() +
+  geom_point(aes(colour=crime_type),position="jitter") +
+  ggtitle("Boxplots for Total AntiRace Crime Victims by Crime Type")
+
+g76 <- ggplot(hate, aes(crime_type,totalAntiGay))
+g76 + geom_boxplot() +
+  geom_point(aes(colour=crime_type),position="jitter") +
+  ggtitle("Boxplots for Total AntiGay Crime Victims by Crime Type")
+
+
+```
+
+
+### Scatterplots  
+There appears to be a strong positive linear association between the total number of offenders and the total number of victims for property crimes across the entire time period and within each year. For crimes against persons, some years indicate deviations from a somewhat strong linear relationship between the number of offenders and victims. It might be useful to research these years further to determine if any mass hate crimes occurred to people during these years.  It also might be useful to investigate whether any mob-like hate crimes were committed against single victims. 
+```{r scatterplots, echo=TRUE}
+g81 <- ggplot(hate, aes(total_offenders,total_victims, group=crime_type))
+g81 + geom_point(aes(color=crime_type)) +
+  labs(x="Offenders", y="Victims", fill="Crime Type") + 
+  ggtitle("Scatterplot of Total Offenders by Total Victims for Each Crime Type")
+
+g82 <- ggplot(hate, aes(total_offenders,total_victims, group=crime_type))
+g82 + geom_point(aes(color=crime_type)) +
+  labs(x="Offenders", y="Victims", fill="Crime Type") + 
+   facet_wrap(~year) +
+  ggtitle("Scatterplot of Total Offenders by Total Victims for Each Crime Type in Each Year")
+
+
+g84 <- ggplot(hate, aes(total_victims, anti_gay_male, group=crime_type))
+g84 + geom_point(aes(color=crime_type)) +
+  labs(x="Total Victims", y="Anti-Gay Victims", fill="Crime Type") + 
+  ggtitle("Total Victims by Total Anti-Gay Male Crime Victims for Each Crime Type")
+
+g85 <- ggplot(hate, aes(total_victims,anti_gay_male, group=crime_type))
+g85 + geom_point(aes(color=crime_type)) +
+  labs(x="Total Victims", y="Anti-Gay Male Victims", fill="Crime Type") + 
+   facet_wrap(~year) +
+  ggtitle("Total Victims by Total Anti-Gay Male Crime Victims for Each Crime Type in Each Year")
+
+```
+
+
+
+## Final Thoughts  
+
+Additional information about these hate crimes could add more insight into this analysis, as well as explain some events more clearly and completely. Information on the specific crimes that were committed against certain groups of victims may be useful to investigate further. Also, research into any mass hate crime incidents that involved one offender and multiple victims over the time period would be useful. Similarly, information regarding any mob-like hate crimes that were committed by a group of offenders against a single victim might also aid in understanding this dataset.
+
